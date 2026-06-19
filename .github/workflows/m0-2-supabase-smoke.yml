@@ -1,0 +1,51 @@
+name: m0-2-supabase-smoke
+
+# Acceptance gate for M0-2: prove dev connectivity and that migrations would
+# apply cleanly — WITHOUT applying anything (dry-run only).
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - ".env.example"
+      - "railway.json"
+      - ".github/workflows/m0-2-supabase-smoke.yml"
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/m0-2-supabase-smoke.yml"
+  workflow_dispatch: {}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      DEV_DIRECT_URL: ${{ secrets.DEV_DIRECT_URL }}
+      DEV_PROJECT_REF: ${{ secrets.DEV_PROJECT_REF }}
+      DEV_DB_PASSWORD: ${{ secrets.DEV_DB_PASSWORD }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Connectivity check (SELECT 1 over the session pooler)
+        run: |
+          psql "$DEV_DIRECT_URL" -v ON_ERROR_STOP=1 -c "select 1 as ok;"
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link dev project
+        run: |
+          supabase link --project-ref "$DEV_PROJECT_REF" --password "$DEV_DB_PASSWORD"
+
+      - name: Migration dry-run (no apply)
+        run: |
+          supabase db push --dry-run --db-url "$DEV_DIRECT_URL"

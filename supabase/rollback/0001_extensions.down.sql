@@ -1,0 +1,5 @@
+-- DOWN for 0001_extensions. DESTRUCTIVE — rarely run; full teardown only.
+-- Dropping shared extensions can break other objects. Leave commented unless
+-- you are tearing the whole database down on a throwaway instance.
+-- drop extension if exists vector;
+-- drop extension if exists pgcrypto;
