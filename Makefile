@@ -8,7 +8,7 @@ API_DIR := services/api
 PSQL := psql "$$DIRECT_URL" -v ON_ERROR_STOP=1
 
 .PHONY: help install dev test lint typecheck check-env \
-        supabase-start db-migrate db-verify db-test db-rollback-last
+        supabase-start db-migrate db-verify db-test db-seed db-seed-verify db-rollback-last
 
 help:                ## Show this help
 > @grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -45,6 +45,12 @@ db-verify:           ## Run the M0-3 verification script
 
 db-test:             ## Run the pgTAP structural suite
 > $(PSQL) -f supabase/tests/m0_3_schema.test.sql
+
+db-seed:             ## Load the DEV seed (supabase/seed.sql) — DEV/local only, never prod
+> $(PSQL) -f supabase/seed.sql
+
+db-seed-verify:      ## Verify M0-5 dev-seed invariants (hard-asserts)
+> $(PSQL) -f verification/verify_m0_5.sql
 
 db-rollback-last:    ## Roll back the most recent migration (staging/local only)
 > $(PSQL) -f supabase/rollback/0013_dedup_trigger.down.sql

@@ -23,6 +23,12 @@ pool_mode = "transaction"
 default_pool_size = 20
 max_client_conn = 100
 
+# Dev seed (M0-5). Loaded by `supabase db reset`. DEV ONLY — never promoted
+# to a numbered migration and never applied to production.
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
 [studio]
 enabled = true
 port = 54323
