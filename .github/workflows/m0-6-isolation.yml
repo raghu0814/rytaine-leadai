@@ -1,0 +1,84 @@
+name: m0-6-isolation
+
+# Acceptance gate for M0-6: prove multi-tenant data isolation is enforced by the
+# DATABASE alone (RLS + helpers + storage policies, migrations 0014-0016) on top
+# of the 0001-0013 schema. Runs the pgTAP isolation suite against a REAL Supabase
+# local stack (real anon/authenticated/service_role roles, storage schema,
+# pgvector) brought up via `supabase db start`, so the enforcement path matches
+# production. The suite is seed-independent and wrapped in BEGIN/ROLLBACK.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - "tests/m0_6_isolation.test.sql"
+      - ".github/workflows/m0-6-isolation.yml"
+  pull_request:
+    paths:
+      - "supabase/**"
+      - "tests/m0_6_isolation.test.sql"
+      - ".github/workflows/m0-6-isolation.yml"
+  workflow_dispatch: {}
+
+jobs:
+  isolation:
+    runs-on: ubuntu-latest
+    env:
+      # Default local-stack connection string printed by `supabase start`.
+      LOCAL_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client + pg_prove
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            postgresql-client \
+            libtap-parser-sourcehandler-pgtap-perl
+          pg_prove --version
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase stack
+        # Brings up Postgres with real roles + storage schema + pgvector, applies
+        # migrations 0001-0016 in order, and loads supabase/seed.sql. The seed is
+        # irrelevant to this suite (it is seed-independent) but `db start` runs it.
+        run: |
+          supabase db start
+
+      - name: Wait for database readiness
+        run: |
+          for i in $(seq 1 30); do
+            if psql "$LOCAL_DB_URL" -c "select 1" >/dev/null 2>&1; then
+              echo "database is ready"; exit 0
+            fi
+            echo "waiting for db... ($i)"; sleep 2
+          done
+          echo "database did not become ready in time" >&2; exit 1
+
+      - name: Confirm isolation prerequisites (helpers + RLS/FORCE)
+        # Fast fail with a clear message if 0014-0016 did not apply, before pgTAP.
+        run: |
+          psql "$LOCAL_DB_URL" -v ON_ERROR_STOP=1 -t -A -c "
+            select case
+              when (select count(*) from pg_proc
+                    where proname in ('current_company_id','current_user_role')) = 2
+               and (select count(*) from pg_class c
+                    join pg_namespace n on n.oid = c.relnamespace
+                    where n.nspname='public' and c.relkind='r'
+                      and c.relrowsecurity and c.relforcerowsecurity) = 16
+              then 'PREREQS OK'
+              else 'PREREQS MISSING' end;" | grep -q 'PREREQS OK'
+
+      - name: Run M0-6 isolation suite (pgTAP)
+        run: |
+          pg_prove --verbose "$LOCAL_DB_URL" tests/m0_6_isolation.test.sql
+
+      - name: Stop local Supabase stack
+        if: always()
+        run: |
+          supabase stop || true

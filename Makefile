@@ -8,7 +8,8 @@ API_DIR := services/api
 PSQL := psql "$$DIRECT_URL" -v ON_ERROR_STOP=1
 
 .PHONY: help install dev test lint typecheck check-env \
-        supabase-start db-migrate db-verify db-test db-seed db-seed-verify db-rollback-last
+        supabase-start db-migrate db-verify db-test db-seed db-seed-verify db-rollback-last \
+        db-test-isolation db-isolation-prove
 
 help:                ## Show this help
 > @grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -54,3 +55,9 @@ db-seed-verify:      ## Verify M0-5 dev-seed invariants (hard-asserts)
 
 db-rollback-last:    ## Roll back the most recent migration (staging/local only)
 > $(PSQL) -f supabase/rollback/0013_dedup_trigger.down.sql
+
+db-test-isolation:   ## Run the M0-6 DB tenant-isolation suite (raw TAP via psql)
+> $(PSQL) -f tests/m0_6_isolation.test.sql
+
+db-isolation-prove:  ## Run the M0-6 isolation suite under pg_prove (pass/fail exit code)
+> pg_prove -d "$$DIRECT_URL" tests/m0_6_isolation.test.sql
