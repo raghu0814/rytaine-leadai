@@ -36,12 +36,25 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-q"
 
+markers = [
+    "integration: DB-backed tests requiring a real Postgres (set INTEGRATION_DATABASE_URL); skipped otherwise",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "C4"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Security",
+]
 
 [tool.mypy]
 python_version = "3.11"

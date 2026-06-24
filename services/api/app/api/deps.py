@@ -7,19 +7,23 @@ milestones. M0-1 ships no protected routes — these are wired and tested only.
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException
+from collections.abc import AsyncIterator
+
+from fastapi import Depends, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import Settings, get_settings
 from app.core.security import AuthError, authenticate
+from app.db.session import get_sessionmaker
+from app.db.tenant import set_tenant_context
 from app.schemas.auth import Principal, UserRole
 
 _bearer = HTTPBearer(auto_error=False)
 
 
-def _settings_dep() -> Settings:
-    return get_settings()
-
+def _settings_dep(request: Request) -> Settings:
+    return getattr(request.app.state, "settings", None) or get_settings()
 
 async def get_current_principal(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -54,3 +58,17 @@ def require_roles(*roles: UserRole):
         return principal
 
     return _guard
+
+async def get_tenant_db(
+    principal: Principal = Depends(get_current_principal),
+) -> AsyncIterator[AsyncSession]:
+    sessionmaker = get_sessionmaker()
+
+    async with sessionmaker() as session:
+        try:
+            await set_tenant_context(session, principal)
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
