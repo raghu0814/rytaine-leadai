@@ -9,7 +9,7 @@ PSQL := psql "$$DIRECT_URL" -v ON_ERROR_STOP=1
 
 .PHONY: help install dev test lint typecheck check-env \
         supabase-start db-migrate db-verify db-test db-seed db-seed-verify db-rollback-last \
-        db-test-isolation db-isolation-prove
+        db-test-isolation db-isolation-prove test-integration
 
 help:                ## Show this help
 > @grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -25,6 +25,9 @@ dev:                 ## Run the API locally with autoreload
 
 test:                ## Run the API unit tests (offline)
 > cd $(API_DIR) && . .venv/bin/activate && pytest
+
+test-integration:    ## Run DB-backed API integration tests
+> cd $(API_DIR) && . .venv/bin/activate && pytest tests/integration -v
 
 lint:                ## Ruff lint
 > cd $(API_DIR) && . .venv/bin/activate && ruff check .
